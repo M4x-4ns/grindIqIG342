@@ -3,19 +3,21 @@ import type { BeanProfile } from '@/types/bean'
 import type { GrinderConfig } from '@/types/grinder'
 import type { ShotLog } from '@/types/shot'
 
-// vi.mock is hoisted — apiService module is mocked before imports resolve
-vi.mock('@/services/apiService', () => ({
-  fetchGrinders: vi.fn(),
-  fetchBeans:    vi.fn(),
-  fetchShots:    vi.fn(),
-  createBean:    vi.fn(),
-  updateBean:    vi.fn(),
-  deleteBean:    vi.fn(),
-  createShot:    vi.fn(),
+// vi.mock is hoisted — localStorageService module is mocked before imports resolve
+vi.mock('@/services/localStorageService', () => ({
+  fetchGrinders:       vi.fn(),
+  fetchBeans:          vi.fn(),
+  fetchShots:          vi.fn(),
+  fetchSensorOverride: vi.fn(),
+  saveSensorOverride:  vi.fn(),
+  createBean:          vi.fn(),
+  updateBean:          vi.fn(),
+  deleteBean:          vi.fn(),
+  createShot:          vi.fn(),
 }))
 
 import { useAppStore } from './useAppStore'
-import * as api from '@/services/apiService'
+import * as ls from '@/services/localStorageService'
 
 const makeGrinder = (id = 'grinder-a'): GrinderConfig => ({
   id,
@@ -55,6 +57,7 @@ const makeShot = (id = 's1'): ShotLog => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(ls.fetchSensorOverride).mockReturnValue(null)
   useAppStore.setState({
     grinders: [],
     beans: [],
@@ -68,13 +71,13 @@ beforeEach(() => {
 })
 
 describe('hydrateFromApi', () => {
-  it('fetches all resources in parallel and populates the store', async () => {
+  it('fetches all resources and populates the store', async () => {
     const grinder = makeGrinder()
     const bean = makeBean()
     const shot = makeShot()
-    vi.mocked(api.fetchGrinders).mockResolvedValue([grinder])
-    vi.mocked(api.fetchBeans).mockResolvedValue([bean])
-    vi.mocked(api.fetchShots).mockResolvedValue([shot])
+    vi.mocked(ls.fetchGrinders).mockReturnValue([grinder])
+    vi.mocked(ls.fetchBeans).mockReturnValue([bean])
+    vi.mocked(ls.fetchShots).mockReturnValue([shot])
 
     await useAppStore.getState().hydrateFromApi()
 
@@ -90,9 +93,9 @@ describe('hydrateFromApi', () => {
     const grinder = makeGrinder()
     const inactiveBean = { ...makeBean('b0'), isActive: false }
     const activeBean   = makeBean('b1')
-    vi.mocked(api.fetchGrinders).mockResolvedValue([grinder])
-    vi.mocked(api.fetchBeans).mockResolvedValue([inactiveBean, activeBean])
-    vi.mocked(api.fetchShots).mockResolvedValue([])
+    vi.mocked(ls.fetchGrinders).mockReturnValue([grinder])
+    vi.mocked(ls.fetchBeans).mockReturnValue([inactiveBean, activeBean])
+    vi.mocked(ls.fetchShots).mockReturnValue([])
 
     await useAppStore.getState().hydrateFromApi()
 
@@ -104,9 +107,9 @@ describe('hydrateFromApi', () => {
   it('falls back to beans[0] when no active bean exists', async () => {
     const grinder = makeGrinder()
     const bean = { ...makeBean(), isActive: false }
-    vi.mocked(api.fetchGrinders).mockResolvedValue([grinder])
-    vi.mocked(api.fetchBeans).mockResolvedValue([bean])
-    vi.mocked(api.fetchShots).mockResolvedValue([])
+    vi.mocked(ls.fetchGrinders).mockReturnValue([grinder])
+    vi.mocked(ls.fetchBeans).mockReturnValue([bean])
+    vi.mocked(ls.fetchShots).mockReturnValue([])
 
     await useAppStore.getState().hydrateFromApi()
 
@@ -119,9 +122,9 @@ describe('hydrateFromApi', () => {
     const bean1 = makeBean('b1')
     const bean2 = makeBean('b2')
     useAppStore.setState({ selectedGrinder: grinder1, selectedBean: bean1 })
-    vi.mocked(api.fetchGrinders).mockResolvedValue([grinder1, grinder2])
-    vi.mocked(api.fetchBeans).mockResolvedValue([bean1, bean2])
-    vi.mocked(api.fetchShots).mockResolvedValue([])
+    vi.mocked(ls.fetchGrinders).mockReturnValue([grinder1, grinder2])
+    vi.mocked(ls.fetchBeans).mockReturnValue([bean1, bean2])
+    vi.mocked(ls.fetchShots).mockReturnValue([])
 
     await useAppStore.getState().hydrateFromApi()
 
@@ -131,9 +134,9 @@ describe('hydrateFromApi', () => {
   })
 
   it('sets error and clears isLoading on fetch failure', async () => {
-    vi.mocked(api.fetchGrinders).mockRejectedValue(new Error('Network error'))
-    vi.mocked(api.fetchBeans).mockResolvedValue([])
-    vi.mocked(api.fetchShots).mockResolvedValue([])
+    vi.mocked(ls.fetchGrinders).mockImplementation(() => { throw new Error('Storage error') })
+    vi.mocked(ls.fetchBeans).mockReturnValue([])
+    vi.mocked(ls.fetchShots).mockReturnValue([])
 
     await useAppStore.getState().hydrateFromApi()
 
@@ -147,24 +150,38 @@ describe('hydrateFromApi', () => {
 
     await useAppStore.getState().hydrateFromApi()
 
-    expect(api.fetchGrinders).not.toHaveBeenCalled()
+    expect(ls.fetchGrinders).not.toHaveBeenCalled()
+  })
+
+  it('restores saved sensor override from localStorage', async () => {
+    vi.mocked(ls.fetchGrinders).mockReturnValue([])
+    vi.mocked(ls.fetchBeans).mockReturnValue([])
+    vi.mocked(ls.fetchShots).mockReturnValue([])
+    vi.mocked(ls.fetchSensorOverride).mockReturnValue({ temperature: 30, humidity: 70 })
+
+    await useAppStore.getState().hydrateFromApi()
+
+    const { sensor } = useAppStore.getState()
+    expect(sensor.isManualOverride).toBe(true)
+    expect(sensor.reading?.temperature).toBe(30)
+    expect(sensor.reading?.humidity).toBe(70)
   })
 })
 
 describe('createBean', () => {
-  it('calls api.createBean, prepends the bean, and clears isSaving', async () => {
+  it('calls ls.createBean, prepends the bean, and clears isSaving', async () => {
     const bean = makeBean()
-    vi.mocked(api.createBean).mockResolvedValue(bean)
+    vi.mocked(ls.createBean).mockReturnValue(bean)
 
     await useAppStore.getState().createBean(bean)
 
-    expect(api.createBean).toHaveBeenCalledWith(bean)
+    expect(ls.createBean).toHaveBeenCalledWith(bean)
     expect(useAppStore.getState().beans).toEqual([bean])
     expect(useAppStore.getState().isSaving).toBe(false)
   })
 
-  it('sets error and rethrows on API failure', async () => {
-    vi.mocked(api.createBean).mockRejectedValue(new Error('fail'))
+  it('sets error and rethrows on failure', async () => {
+    vi.mocked(ls.createBean).mockImplementation(() => { throw new Error('fail') })
 
     await expect(useAppStore.getState().createBean(makeBean())).rejects.toThrow('fail')
 
@@ -174,11 +191,11 @@ describe('createBean', () => {
 })
 
 describe('updateBean', () => {
-  it('calls api.updateBean, replaces the bean in store, and syncs selectedBean', async () => {
+  it('calls ls.updateBean, replaces the bean in store, and syncs selectedBean', async () => {
     const bean = makeBean()
     useAppStore.setState({ beans: [bean], selectedBean: bean })
     const updated = { ...bean, name: 'Updated' }
-    vi.mocked(api.updateBean).mockResolvedValue(updated)
+    vi.mocked(ls.updateBean).mockReturnValue(updated)
 
     await useAppStore.getState().updateBean(updated)
 
@@ -189,10 +206,10 @@ describe('updateBean', () => {
 })
 
 describe('deleteBean', () => {
-  it('calls api.deleteBean, removes bean from store, and clears selectedBean', async () => {
+  it('calls ls.deleteBean, removes bean from store, and clears selectedBean', async () => {
     const bean = makeBean()
     useAppStore.setState({ beans: [bean], selectedBean: bean })
-    vi.mocked(api.deleteBean).mockResolvedValue(undefined)
+    vi.mocked(ls.deleteBean).mockReturnValue(undefined)
 
     await useAppStore.getState().deleteBean(bean.id)
 
@@ -203,41 +220,41 @@ describe('deleteBean', () => {
 })
 
 describe('saveShot', () => {
-  it('calls api.createShot and prepends the shot to the store', async () => {
+  it('calls ls.createShot and prepends the shot to the store', async () => {
     const shot = makeShot()
-    vi.mocked(api.createShot).mockResolvedValue(shot)
+    vi.mocked(ls.createShot).mockReturnValue(shot)
 
     await useAppStore.getState().saveShot(shot)
 
-    expect(api.createShot).toHaveBeenCalledWith(shot)
+    expect(ls.createShot).toHaveBeenCalledWith(shot)
     expect(useAppStore.getState().shots).toEqual([shot])
     expect(useAppStore.getState().isSaving).toBe(false)
   })
 })
 
 describe('mutation failure paths', () => {
-  it('updateBean sets error and rethrows on API failure', async () => {
-    vi.mocked(api.updateBean).mockRejectedValue(new Error('network error'))
+  it('updateBean sets error and rethrows on failure', async () => {
+    vi.mocked(ls.updateBean).mockImplementation(() => { throw new Error('storage error') })
 
-    await expect(useAppStore.getState().updateBean(makeBean())).rejects.toThrow('network error')
-
-    expect(useAppStore.getState().error).toBeTruthy()
-    expect(useAppStore.getState().isSaving).toBe(false)
-  })
-
-  it('deleteBean sets error and rethrows on API failure', async () => {
-    vi.mocked(api.deleteBean).mockRejectedValue(new Error('network error'))
-
-    await expect(useAppStore.getState().deleteBean('b1')).rejects.toThrow('network error')
+    await expect(useAppStore.getState().updateBean(makeBean())).rejects.toThrow('storage error')
 
     expect(useAppStore.getState().error).toBeTruthy()
     expect(useAppStore.getState().isSaving).toBe(false)
   })
 
-  it('saveShot sets error and rethrows on API failure', async () => {
-    vi.mocked(api.createShot).mockRejectedValue(new Error('network error'))
+  it('deleteBean sets error and rethrows on failure', async () => {
+    vi.mocked(ls.deleteBean).mockImplementation(() => { throw new Error('storage error') })
 
-    await expect(useAppStore.getState().saveShot(makeShot())).rejects.toThrow('network error')
+    await expect(useAppStore.getState().deleteBean('b1')).rejects.toThrow('storage error')
+
+    expect(useAppStore.getState().error).toBeTruthy()
+    expect(useAppStore.getState().isSaving).toBe(false)
+  })
+
+  it('saveShot sets error and rethrows on failure', async () => {
+    vi.mocked(ls.createShot).mockImplementation(() => { throw new Error('storage error') })
+
+    await expect(useAppStore.getState().saveShot(makeShot())).rejects.toThrow('storage error')
 
     expect(useAppStore.getState().error).toBeTruthy()
     expect(useAppStore.getState().isSaving).toBe(false)
