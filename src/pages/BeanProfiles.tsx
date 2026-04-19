@@ -25,7 +25,7 @@ export default function BeanProfiles() {
 
   return (
     <div
-      className="flex overflow-hidden"
+      className="flex overflow-hidden relative"
       style={{ background: 'var(--bg)', height: 'calc(100vh - 57px)' }}
     >
       {/* Left: grid area */}
@@ -50,7 +50,7 @@ export default function BeanProfiles() {
         </div>
 
         {/* 2-column card grid */}
-        <div className="grid grid-cols-2 gap-[9px]">
+        <div className="grid grid-cols-2 landscape:grid-cols-3 gap-[9px]">
           {beans.map((bean) => (
             <BeanCard
               key={bean.id}

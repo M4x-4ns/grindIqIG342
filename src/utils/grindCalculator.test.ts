@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { calculateGrind, formatAdjustment } from './grindCalculator'
+import { calculateGrind, formatAdjustment, hasBaselineForGrinder } from './grindCalculator'
 import type { BeanProfile } from '@/types/bean'
 import type { GrinderConfig } from '@/types/grinder'
 
@@ -82,5 +82,56 @@ describe('formatAdjustment', () => {
   })
   it('handles zero', () => {
     expect(formatAdjustment(0)).toBe('+0')
+  })
+})
+
+// ─── hasBaselineForGrinder ────────────────────────────────────────────────────
+
+describe('hasBaselineForGrinder', () => {
+  // bean is assumed to always be a valid BeanProfile (baselineGrinds always present)
+  const bean: BeanProfile = {
+    id: 'b1',
+    name: 'Test',
+    origin: 'Ethiopia',
+    agtron: 75,
+    roastLevel: 'light',
+    baselineGrinds: { 'grinder-a': 10, 'grinder-zero': 0 },
+    baselineTemp: 25,
+    baselineHumidity: 60,
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00Z',
+  }
+
+  const grinder: GrinderConfig = {
+    id: 'grinder-a',
+    label: 'A',
+    roastLevel: 'light',
+    grinderType: 'stepless',
+    baselineGrind: 10,
+    tempCoefficient: 0.15,
+    humidityCoefficient: 0.05,
+    isActive: true,
+  }
+
+  it('returns true when grinder is null', () => {
+    expect(hasBaselineForGrinder(bean, null)).toBe(true)
+  })
+
+  it('returns true when grinder is undefined', () => {
+    expect(hasBaselineForGrinder(bean, undefined)).toBe(true)
+  })
+
+  it('returns true when bean has a baseline for the grinder', () => {
+    expect(hasBaselineForGrinder(bean, grinder)).toBe(true)
+  })
+
+  it('returns false when bean has no entry for the grinder', () => {
+    const unknownGrinder: GrinderConfig = { ...grinder, id: 'grinder-unknown' }
+    expect(hasBaselineForGrinder(bean, unknownGrinder)).toBe(false)
+  })
+
+  it('returns false when baseline value is 0 (0 means not entered — BeanForm blank fields save as 0)', () => {
+    const zeroGrinder: GrinderConfig = { ...grinder, id: 'grinder-zero' }
+    expect(hasBaselineForGrinder(bean, zeroGrinder)).toBe(false)
   })
 })

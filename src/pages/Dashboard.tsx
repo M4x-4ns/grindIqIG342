@@ -1,6 +1,7 @@
+import { useState, useEffect } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { useSensor } from '@/hooks/useSensor'
-import { calculateGrind } from '@/utils/grindCalculator'
+import { calculateGrind, hasBaselineForGrinder } from '@/utils/grindCalculator'
 import { GrinderSelector } from '@/components/grinder/GrinderSelector'
 import { GrindRecommendation } from '@/components/calculator/GrindRecommendation'
 import { ShotFeedback } from '@/components/feedback/ShotFeedback'
@@ -26,14 +27,20 @@ function BeanCard({ bean }: { bean: BeanProfile }) {
   const temp     = sensor.reading?.temperature ?? 25
   const humidity = sensor.reading?.humidity    ?? 60
 
+  const hasGrind = hasBaselineForGrinder(bean, selectedGrinder)
+
   // Show live calculation when a grinder is selected; fall back to the bean's
   // baseline for the first grinder in the store (or '—' if store is empty).
-  const grindDisplay = selectedGrinder
-    ? calculateGrind(bean, selectedGrinder, temp, humidity).displayValue
-    : bean.baselineGrinds[grinders[0]?.id ?? '']?.toString() ?? '—'
+  const grindDisplay = hasGrind
+    ? selectedGrinder
+      ? calculateGrind(bean, selectedGrinder, temp, humidity).displayValue
+      : bean.baselineGrinds[grinders[0]?.id ?? '']?.toString() ?? '—'
+    : null
 
   function handleSelect() {
     // Tapping a bean sets selectedBean only — grinder selection is unaffected.
+    // Guard: do not allow selecting a bean that has no grind for the current grinder.
+    if (!hasGrind) return
     setSelectedBean(bean)
   }
 
@@ -41,9 +48,11 @@ function BeanCard({ bean }: { bean: BeanProfile }) {
     <button
       onClick={handleSelect}
       className={`relative bg-[var(--card)] border-[1.5px] rounded-[var(--r)] p-4 text-left transition-all duration-[180ms] overflow-hidden select-none w-full
-        ${isSelected
-          ? 'border-[var(--red)] bg-[var(--card2)] shadow-[0_0_0_1px_var(--red),0_8px_24px_rgba(0,0,0,.4)]'
-          : 'border-[var(--border)] hover:border-[var(--border2)] hover:bg-[var(--card2)]'
+        ${!hasGrind
+          ? 'opacity-50 cursor-not-allowed pointer-events-none border-[var(--border)]'
+          : isSelected
+            ? 'border-[var(--red)] bg-[var(--card2)] shadow-[0_0_0_1px_var(--red),0_8px_24px_rgba(0,0,0,.4)]'
+            : 'border-[var(--border)] hover:border-[var(--border2)] hover:bg-[var(--card2)]'
         }`}
     >
       {/* Top row */}
@@ -69,12 +78,21 @@ function BeanCard({ bean }: { bean: BeanProfile }) {
         {bean.origin} · {bean.roastLevel.charAt(0).toUpperCase() + bean.roastLevel.slice(1)}
       </div>
 
-      <div className={`text-[30px] font-black tracking-[-1px] leading-none tabular-nums ${isSelected ? 'text-white' : 'text-[var(--text)]'}`}>
-        {grindDisplay}
-      </div>
-      {selectedGrinder && (
-        <div className="text-[10px] text-[var(--muted)] mt-[2px]">
-          {selectedGrinder.grinderType} · grinder {selectedGrinder.label}
+      {hasGrind ? (
+        <>
+          <div className={`text-[30px] font-black tracking-[-1px] leading-none tabular-nums ${isSelected ? 'text-white' : 'text-[var(--text)]'}`}>
+            {grindDisplay}
+          </div>
+          {selectedGrinder && (
+            <div className="text-[10px] text-[var(--muted)] mt-[2px]">
+              {selectedGrinder.grinderType} · grinder {selectedGrinder.label}
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="bg-[rgba(255,255,255,.04)] border border-dashed border-[rgba(255,255,255,.12)] rounded-[8px] px-[12px] py-[10px] mt-1">
+          <div className="text-[12px] font-bold text-[rgba(240,240,245,.38)]">No grind set</div>
+          <div className="text-[10px] text-[rgba(240,240,245,.22)] mt-[3px]">Set in Beans →</div>
         </div>
       )}
 
@@ -85,6 +103,19 @@ function BeanCard({ bean }: { bean: BeanProfile }) {
   )
 }
 
+function useIsLandscape(): boolean {
+  const [landscape, setLandscape] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(orientation: landscape)').matches
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: landscape)')
+    const handler = (e: MediaQueryListEvent) => setLandscape(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+  return landscape
+}
+
 /**
  * PRD §F-01, F-02, F-03, F-04
  * Primary barista screen — grinder selection, grind recommendation, sensor status, shot feedback.
@@ -93,25 +124,53 @@ export default function Dashboard() {
   useSensor()
 
   const { beans, selectedBean } = useAppStore()
+  const isLandscape = useIsLandscape()
 
   if (!selectedBean) return null
 
+  // ── Shared: beans section (used in both branches) ─────────────────────────
+  const beansSection = (
+    <div>
+      <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[1px] text-[var(--muted)] mb-[10px]">
+        Beans
+        <div className="flex-1 h-px bg-[var(--border)]" />
+      </div>
+      <div className="grid grid-cols-2 gap-[10px]">
+        {beans.filter(b => b.isActive).map(bean => (
+          <BeanCard key={bean.id} bean={bean} />
+        ))}
+      </div>
+    </div>
+  )
+
+  // ── Landscape: two-panel layout ────────────────────────────────────────────
+  if (isLandscape) {
+    return (
+      <div className="h-screen overflow-hidden flex flex-row" style={{ background: 'var(--bg)' }}>
+        {/* Left panel — 40%: grinder selector + grind recommendation */}
+        <div className="w-[40%] overflow-y-auto border-r border-[var(--border)] flex flex-col gap-[14px] pt-4 px-4 pb-4">
+          <GrinderSelector />
+          <GrindRecommendation />
+        </div>
+
+        {/* Right panel — 60%: beans + shot feedback */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto pt-4 px-4 pb-4">
+            {beansSection}
+          </div>
+          <ShotFeedback variant="inline" />
+        </div>
+      </div>
+    )
+  }
+
+  // ── Portrait: single-column layout (unchanged) ─────────────────────────────
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
-      <div className="max-w-3xl mx-auto flex flex-col gap-[14px] px-4 pt-4 pb-[224px]">
+      <div className="max-w-3xl mx-auto flex flex-col gap-[14px] px-4 pt-4 pb-[230px]">
         <GrinderSelector />
         <GrindRecommendation />
-        <div>
-          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[1px] text-[var(--muted)] mb-[10px]">
-            Beans
-            <div className="flex-1 h-px bg-[var(--border)]" />
-          </div>
-          <div className="grid grid-cols-2 gap-[10px]">
-            {beans.map(bean => (
-              <BeanCard key={bean.id} bean={bean} />
-            ))}
-          </div>
-        </div>
+        {beansSection}
       </div>
       <ShotFeedback />
     </div>

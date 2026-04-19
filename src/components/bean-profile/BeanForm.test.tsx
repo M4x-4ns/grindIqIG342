@@ -129,3 +129,45 @@ describe('BeanForm — validation', () => {
     expect(screen.getByText(/0.*100/i)).toBeTruthy()
   })
 })
+
+// --- Optional baseline grind ---
+describe('BeanForm — optional baseline grind', () => {
+  it('Add Bean button is enabled when baseline grind fields are left empty', async () => {
+    render(<BeanForm grinders={grinders} onSave={vi.fn()} />)
+    await userEvent.type(screen.getByLabelText(/^name$/i), 'Test Bean')
+    await userEvent.type(screen.getByLabelText(/^origin$/i), 'Ethiopia')
+    await userEvent.clear(screen.getByLabelText(/^agtron$/i))
+    await userEvent.type(screen.getByLabelText(/^agtron$/i), '70')
+    await userEvent.clear(screen.getByLabelText(/temp/i))
+    await userEvent.type(screen.getByLabelText(/temp/i), '25')
+    await userEvent.clear(screen.getByLabelText(/humidity/i))
+    await userEvent.type(screen.getByLabelText(/humidity/i), '60')
+    // baseline grind intentionally left empty
+    expect(screen.getByRole('button', { name: /add bean/i })).not.toBeDisabled()
+  })
+
+  it('does not show a validation error on blur when baseline grind is left empty', async () => {
+    render(<BeanForm grinders={grinders} onSave={vi.fn()} />)
+    const grindInput = screen.getByLabelText(/^junior$/i)
+    fireEvent.blur(grindInput)
+    expect(screen.queryByText(/required/i)).toBeNull()
+  })
+
+  it('saves with baselineGrind of 0 when field is left empty', async () => {
+    const onSave = vi.fn()
+    render(<BeanForm grinders={grinders} onSave={onSave} />)
+    await userEvent.type(screen.getByLabelText(/^name$/i), 'Test Bean')
+    await userEvent.type(screen.getByLabelText(/^origin$/i), 'Ethiopia')
+    await userEvent.clear(screen.getByLabelText(/^agtron$/i))
+    await userEvent.type(screen.getByLabelText(/^agtron$/i), '70')
+    await userEvent.clear(screen.getByLabelText(/temp/i))
+    await userEvent.type(screen.getByLabelText(/temp/i), '25')
+    await userEvent.clear(screen.getByLabelText(/humidity/i))
+    await userEvent.type(screen.getByLabelText(/humidity/i), '60')
+    // baseline grind intentionally left empty → should default to 0
+    await userEvent.click(screen.getByRole('button', { name: /add bean/i }))
+    expect(onSave).toHaveBeenCalledOnce()
+    const [savedBean] = onSave.mock.calls[0] as [BeanProfile]
+    expect(savedBean.baselineGrinds['grinder-a']).toBe(0)
+  })
+})

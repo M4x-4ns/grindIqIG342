@@ -62,3 +62,28 @@ export function formatAdjustment(value: number): string {
   const rounded = Math.round(value * 100) / 100
   return rounded >= 0 ? `+${rounded}` : String(rounded)
 }
+
+/**
+ * Returns true if the bean has a baseline grind key set for the given grinder.
+ * Returns true (neutral) when no grinder is selected so cards are never
+ * incorrectly disabled when there is no grinder context.
+ *
+ * Uses `in` operator (not `!== undefined`) to be TypeScript-safe with
+ * Record<string, number> — accessing a missing key returns undefined at
+ * runtime but TypeScript types it as number.
+ *
+ * Assumes bean is a valid BeanProfile with baselineGrinds always present.
+ * A value of 0 means "not entered" (BeanForm saves blank fields as 0) and
+ * is treated the same as a missing key — the card will be disabled.
+ *
+ * @see calculateGrind — call this before calculateGrind to guard missing baselines.
+ * calculateGrind silently falls back to grinder.baselineGrind when the key is
+ * absent; this function lets callers gate on that condition explicitly.
+ */
+export function hasBaselineForGrinder(
+  bean: BeanProfile,
+  grinder: GrinderConfig | null | undefined
+): boolean {
+  if (!grinder) return true
+  return (bean.baselineGrinds[grinder.id] ?? 0) > 0
+}

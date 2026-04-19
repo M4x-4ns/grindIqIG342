@@ -59,7 +59,7 @@ export default function ShotLog() {
 
   return (
     <div className="min-h-screen pb-10" style={{ background: 'var(--bg)' }}>
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-3xl landscape:max-w-5xl mx-auto">
 
         {/* Stats card */}
         <div className="px-4 pt-4">
