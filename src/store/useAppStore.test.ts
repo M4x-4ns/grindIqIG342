@@ -86,6 +86,50 @@ describe('hydrateFromApi', () => {
     expect(state.error).toBeNull()
   })
 
+  it('auto-selects first grinder and first active bean when nothing is pre-selected', async () => {
+    const grinder = makeGrinder()
+    const inactiveBean = { ...makeBean('b0'), isActive: false }
+    const activeBean   = makeBean('b1')
+    vi.mocked(api.fetchGrinders).mockResolvedValue([grinder])
+    vi.mocked(api.fetchBeans).mockResolvedValue([inactiveBean, activeBean])
+    vi.mocked(api.fetchShots).mockResolvedValue([])
+
+    await useAppStore.getState().hydrateFromApi()
+
+    const state = useAppStore.getState()
+    expect(state.selectedGrinder).toEqual(grinder)
+    expect(state.selectedBean).toEqual(activeBean)
+  })
+
+  it('falls back to beans[0] when no active bean exists', async () => {
+    const grinder = makeGrinder()
+    const bean = { ...makeBean(), isActive: false }
+    vi.mocked(api.fetchGrinders).mockResolvedValue([grinder])
+    vi.mocked(api.fetchBeans).mockResolvedValue([bean])
+    vi.mocked(api.fetchShots).mockResolvedValue([])
+
+    await useAppStore.getState().hydrateFromApi()
+
+    expect(useAppStore.getState().selectedBean).toEqual(bean)
+  })
+
+  it('does not override existing selections when re-hydrating', async () => {
+    const grinder1 = makeGrinder('grinder-a')
+    const grinder2 = makeGrinder('grinder-b')
+    const bean1 = makeBean('b1')
+    const bean2 = makeBean('b2')
+    useAppStore.setState({ selectedGrinder: grinder1, selectedBean: bean1 })
+    vi.mocked(api.fetchGrinders).mockResolvedValue([grinder1, grinder2])
+    vi.mocked(api.fetchBeans).mockResolvedValue([bean1, bean2])
+    vi.mocked(api.fetchShots).mockResolvedValue([])
+
+    await useAppStore.getState().hydrateFromApi()
+
+    const state = useAppStore.getState()
+    expect(state.selectedGrinder).toEqual(grinder1)
+    expect(state.selectedBean).toEqual(bean1)
+  })
+
   it('sets error and clears isLoading on fetch failure', async () => {
     vi.mocked(api.fetchGrinders).mockRejectedValue(new Error('Network error'))
     vi.mocked(api.fetchBeans).mockResolvedValue([])

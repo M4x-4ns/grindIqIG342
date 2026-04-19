@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store/useAppStore'
 
 export function SensorStatus() {
@@ -56,13 +57,15 @@ export function SensorStatus() {
             </span>
           )}
           <span className="text-[10px] text-[var(--muted)] mt-[2px]">
-            {sensor.isManualOverride ? 'Manual' : 'Manual Input'}
+            {sensor.isManualOverride ? 'Manual' : 'ESP32 · Live'}
           </span>
         </div>
       </button>
 
-      {/* Bottom-sheet modal */}
-      {open && (
+      {/* Bottom-sheet modal — rendered via portal to escape the header's
+          backdrop-filter containing block, which would otherwise clip
+          position:fixed children to the header's bounding box */}
+      {open && createPortal(
         <div
           className="fixed inset-0 bg-black/65 backdrop-blur-[6px] z-50 flex items-end justify-center"
           onClick={e => e.target === e.currentTarget && setOpen(false)}
@@ -70,7 +73,7 @@ export function SensorStatus() {
           <div className="bg-[var(--card2)] border border-[var(--border2)] rounded-t-[22px] w-full max-w-3xl px-[22px] pt-5 pb-9 max-h-[70vh] overflow-y-auto">
             <div className="w-9 h-1 bg-[var(--border2)] rounded-full mx-auto mb-5" />
             <div className="text-[17px] font-extrabold text-white mb-[18px]">
-              🌡 ตั้งค่าอุณหภูมิ & ความชื้น
+              🌡 Sensor — ESP32 + DHT22
             </div>
 
             {isLoading ? (
@@ -126,7 +129,8 @@ export function SensorStatus() {
               Close
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )

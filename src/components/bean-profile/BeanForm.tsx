@@ -70,9 +70,10 @@ function validate(values: FormValues, grinders: GrinderConfig[]): FormErrors {
     errors.agtron = 'Must be an integer 0–100'
   grinders.forEach((g) => {
     const raw = values.baselineGrinds[g.id]
+    if (!raw) return // empty → saves as 0, no error
     const val = Number(raw)
-    if (!raw || isNaN(val) || val <= 0) {
-      errors[`grind_${g.id}`] = 'Required, > 0'
+    if (isNaN(val) || val < 0) {
+      errors[`grind_${g.id}`] = 'Must be ≥ 0'
     } else if (Math.round(val * 10) / 10 !== val) {
       errors[`grind_${g.id}`] = 'Max 1 decimal place'
     }
@@ -86,9 +87,8 @@ function validate(values: FormValues, grinders: GrinderConfig[]): FormErrors {
   return errors
 }
 
-function allRequiredFilled(values: FormValues, grinders: GrinderConfig[]): boolean {
+function allRequiredFilled(values: FormValues): boolean {
   if (!values.name.trim() || !values.origin.trim() || !values.agtron) return false
-  if (grinders.some((g) => !values.baselineGrinds[g.id])) return false
   if (!values.baselineTemp || !values.baselineHumidity) return false
   return true
 }
@@ -114,7 +114,7 @@ export function BeanForm({ initialBean, grinders, onSave, onHide, onDelete, isSa
   }, [confirmDelete])
 
   const isSaveEnabled =
-    allRequiredFilled(values, grinders) &&
+    allRequiredFilled(values) &&
     Object.keys(validate(values, grinders)).length === 0
 
   function handleBlur(field: string) {
@@ -137,7 +137,10 @@ export function BeanForm({ initialBean, grinders, onSave, onHide, onDelete, isSa
       agtron: parseInt(values.agtron, 10),
       roastLevel: values.roastLevel,
       baselineGrinds: Object.fromEntries(
-        grinders.map((g) => [g.id, parseFloat(values.baselineGrinds[g.id])])
+        grinders.map((g) => {
+          const raw = values.baselineGrinds[g.id]
+          return [g.id, raw ? parseFloat(raw) : 0]
+        })
       ),
       baselineTemp: parseFloat(values.baselineTemp),
       baselineHumidity: parseFloat(values.baselineHumidity),

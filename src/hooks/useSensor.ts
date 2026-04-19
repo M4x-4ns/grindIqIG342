@@ -1,24 +1,44 @@
-/**
- * useSensor.ts — University version
- * No ESP32 polling. Uses manual temp/humidity from the store.
- * Sensor values are set to defaults (25°C / 60%) on mount.
- */
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
+import { fetchSensorReading, POLL_INTERVAL_MS } from '@/services/sensorService'
 import { useAppStore } from '@/store/useAppStore'
 
-export function useSensor() {
-  const { setSensor, sensor } = useAppStore()
+const DEV_BYPASS = import.meta.env.VITE_DEV_SENSOR_BYPASS === 'true'
 
-  useEffect(() => {
-    // Only set defaults if no reading exists yet
-    if (!sensor.reading) {
+/**
+ * PRD §F-03 — Polls /api/sensor/latest every POLL_INTERVAL_MS (default 10s).
+ * Sets status: 'disconnected' if the API is unreachable.
+ * In local dev, VITE_DEV_SENSOR_BYPASS=true returns mock data instead.
+ */
+export function useSensor() {
+  const { setSensor } = useAppStore()
+
+  const poll = useCallback(async () => {
+    if (DEV_BYPASS) {
       setSensor({
         status: 'connected',
         reading: { temperature: 25.0, humidity: 60.0, timestamp: new Date().toISOString() },
         lastUpdated: new Date().toISOString(),
-        isManualOverride: true,
+        isManualOverride: false,
       })
+      return
     }
-    // No interval polling — values stay until user changes them manually
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+    try {
+      const reading = await fetchSensorReading()
+      setSensor({
+        status: 'connected',
+        reading,
+        lastUpdated: new Date().toISOString(),
+        isManualOverride: false,
+      })
+    } catch {
+      setSensor({ status: 'disconnected' })
+    }
+  }, [setSensor])
+
+  useEffect(() => {
+    poll()
+    const id = setInterval(poll, POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [poll])
 }

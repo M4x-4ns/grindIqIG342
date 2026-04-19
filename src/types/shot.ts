@@ -9,6 +9,7 @@ export interface ShotLog {
   temp: number
   humidity: number
   extractionTime?: number
+  yieldMl?: number
   feedback: ShotFeedback
   baristaId?: string
   createdAt: string

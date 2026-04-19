@@ -86,6 +86,7 @@ function AppShell() {
           </div>
           {/* SensorStatus renders as a compact pill with click-to-expand modal */}
           <SensorStatus />
+          <span className="text-[10px] text-[var(--muted)] select-none">v{__APP_VERSION__}</span>
         </div>
       </header>
 
@@ -104,7 +105,7 @@ const router = createBrowserRouter([
       { path: 'beans', element: <BeanProfiles /> },
     ],
   },
-])
+], { basename: import.meta.env.BASE_URL })
 
 export default function App() {
   return <RouterProvider router={router} />

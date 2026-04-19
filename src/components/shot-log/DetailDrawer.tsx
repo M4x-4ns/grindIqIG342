@@ -97,6 +97,7 @@ export function DetailDrawer({ shot, bean, grinder, onClose }: DetailDrawerProps
           { label: 'Temperature', value: `${shot.temp.toFixed(1)}\u00B0C`,                                                  extra: '' },
           { label: 'Humidity',    value: `${shot.humidity.toFixed(1)}%`,                                                     extra: '' },
           { label: 'Extraction',  value: shot.extractionTime != null ? `${shot.extractionTime}s` : '\u2014',                extra: '' },
+          { label: 'Yield',       value: shot.yieldMl != null ? `${shot.yieldMl}ml` : '\u2014',                             extra: '' },
           { label: 'Feedback',    value: FB_LABEL[shot.feedback] ?? shot.feedback,                                           extra: FB_COLOR[shot.feedback] ?? '' },
         ].map(row => (
           <div

@@ -127,6 +127,27 @@ export function deleteBean(id: string): void {
   write(KEYS.beans, beans.filter((b) => b.id !== id))
 }
 
+// ─── Sensor override ──────────────────────────────────────────────────────────
+const SENSOR_KEY = 'grindiq_sensor_override'
+
+export interface SensorOverride {
+  temperature: number
+  humidity: number
+}
+
+export function fetchSensorOverride(): SensorOverride | null {
+  try {
+    const raw = localStorage.getItem(SENSOR_KEY)
+    return raw ? (JSON.parse(raw) as SensorOverride) : null
+  } catch {
+    return null
+  }
+}
+
+export function saveSensorOverride(data: SensorOverride): void {
+  localStorage.setItem(SENSOR_KEY, JSON.stringify(data))
+}
+
 // ─── Shots ────────────────────────────────────────────────────────────────────
 export function fetchShots(): ShotLog[] {
   return read<ShotLog>(KEYS.shots, [])
