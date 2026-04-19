@@ -16,6 +16,8 @@ import {
   updateBean as lsUpdateBean,
   deleteBean as lsDeleteBean,
   createShot as lsCreateShot,
+  fetchSensorOverride,
+  saveSensorOverride,
 } from '@/services/localStorageService'
 
 interface AppState {
@@ -62,8 +64,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   setGrinders:        (grinders) => set({ grinders }),
   setBeans:           (beans)    => set({ beans }),
   setShots:           (shots)    => set({ shots }),
-  setSensor: (partial) =>
-    set((state) => ({ sensor: { ...state.sensor, ...partial } })),
+  setSensor: (partial) => {
+    set((state) => ({ sensor: { ...state.sensor, ...partial } }))
+    const updated = { ...get().sensor, ...partial }
+    if (updated.isManualOverride && updated.reading) {
+      saveSensorOverride({ temperature: updated.reading.temperature, humidity: updated.reading.humidity })
+    }
+  },
 
   hydrateFromApi: async () => {
     if (get().isLoading) return
@@ -72,9 +79,23 @@ export const useAppStore = create<AppState>((set, get) => ({
       const grinders = fetchGrinders()
       const beans    = fetchBeans()
       const shots    = fetchShots()
+      const saved    = fetchSensorOverride()
       const firstGrinder = grinders.find((g) => g.isActive) ?? grinders[0] ?? null
       const firstBean    = beans.find((b) => b.isActive) ?? beans[0] ?? null
-      set({ grinders, beans, shots, selectedGrinder: firstGrinder, selectedBean: firstBean, isLoading: false })
+      set({
+        grinders, beans, shots,
+        selectedGrinder: firstGrinder,
+        selectedBean: firstBean,
+        isLoading: false,
+        ...(saved && {
+          sensor: {
+            status: 'connected',
+            reading: { temperature: saved.temperature, humidity: saved.humidity, timestamp: new Date().toISOString() },
+            lastUpdated: new Date().toISOString(),
+            isManualOverride: true,
+          },
+        }),
+      })
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false })
     }
